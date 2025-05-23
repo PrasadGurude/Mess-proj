@@ -1,0 +1,89 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // For Prisma Migrate
+}
+
+model Chat {
+  id              String    @id @default(cuid()) // Unique chat ID
+  name            String // Chat name (e.g., group name or phone number in 1-1 chat)
+  lastMessage     String? // Last message text shown in chat list
+  lastMessageTime DateTime? // Timestamp of the last message
+  phone           String? // Optional: Common phone used to send messages
+  unreadCount     Int       @default(0) // Default unread count is 0
+  labels          String[]  @default(["Demo"]) // Default to empty label list
+  status          Boolean?  @default(true) // Assume chat is active unless specified
+  isVerified      Boolean   @default(false) // Default: not verified
+  supportId       String? // Optional support ID
+  type            ChatType  @default(direct) // Default chat type is GROUP
+
+  // Relationships
+  members  ChatMember[] // Join table: many users to many chats
+  messages Message[] // A chat has many messages
+}
+
+model User {
+  id         String    @id @default(cuid())
+  name       String
+  phone      String    @unique
+  email      String?   @unique
+  password   String // 🔐 Encrypted password stored using bcrypt
+  color      String
+  isAdmin    Boolean   @default(false)
+  avatarUrl  String? // Optional profile image
+  isOnline   Boolean   @default(false)
+  lastSeenAt DateTime?
+
+  // Relationships
+  chatMemberships ChatMember[]
+  sentMessages    Message[]    @relation("SentMessages")
+}
+
+model ChatMember {
+  id     String @id @default(cuid()) // Unique ID per chat membership
+  chat   Chat   @relation(fields: [chatId], references: [id])
+  chatId String
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+
+  isAdmin Boolean @default(false) // ✅ New field to identify admins
+
+  @@unique([chatId, userId]) // Prevents duplicate member entries
+}
+
+model Message {
+  id          String        @id @default(cuid()) // Unique message ID
+  chat        Chat          @relation(fields: [chatId], references: [id])
+  chatId      String
+  sender      User          @relation("SentMessages", fields: [senderId], references: [id])
+  senderId    String
+  content     String // The actual message
+  timestamp   DateTime      @default(now()) // Sent time defaults to now
+  deletedAt   DateTime?
+  status      MessageStatus @default(sent) // Default status is 'sent'
+  isOutgoing  Boolean       @default(true) // Default is sent by current user
+  senderPhone String? // Optional if sender used different number
+  metadata    Json? // Optional metadata (e.g., {isEmail: true})
+}
+
+enum MessageStatus {
+  read
+  delivered
+  sent
+  failed
+}
+
+enum ChatType {
+  group
+  direct
+}
